@@ -15,10 +15,9 @@ import {
   TextField,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel
+  FormControl
 } from '@mui/material';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -50,7 +49,7 @@ const shiftTypes = [
 export const ShiftCalendar: React.FC = () => {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [shifts, setShifts] = useState<ShiftEntry[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const selectedMonth = useState(new Date())[0];
   const [openStaffDialog, setOpenStaffDialog] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
 
