@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>職員別設定 - グループホームシフト表作成ツール</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .staff-selector {
+            margin-bottom: 30px;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+        }
+
+        .staff-selector select {
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-width: 200px;
+        }
+
+        .calendar {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .calendar th {
+            background-color: #f0f0f0;
+            padding: 10px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        .calendar td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            height: 80px;
+            vertical-align: top;
+        }
+
+        .date-cell {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .ng-day {
+            background-color: #ffebee;
+        }
+
+        .ng-day::after {
+            content: "×";
+            color: #f44336;
+            font-size: 24px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .weekend-sun {
+            color: red;
+        }
+
+        .weekend-sat {
+            color: blue;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button.secondary {
+            background-color: #666;
+        }
+
+        button.secondary:hover {
+            background-color: #555;
+        }
+
+        .save-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .save-status.visible {
+            opacity: 1;
+        }
+
+        .error-message {
+            color: #f44336;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>職員別NG日設定</h1>
+        
+        <div class="controls">
+            <div class="staff-selector">
+                <select id="staff-select">
+                    <option value="">職員を選択してください</option>
+                </select>
+            </div>
+
+            <div class="date-controls">
+                <select id="year"></select>
+                <select id="month">
+                    <option value="1">1月</option>
+                    <option value="2">2月</option>
+                    <option value="3">3月</option>
+                    <option value="4">4月</option>
+                    <option value="5">5月</option>
+                    <option value="6">6月</option>
+                    <option value="7">7月</option>
+                    <option value="8">8月</option>
+                    <option value="9">9月</option>
+                    <option value="10">10月</option>
+                    <option value="11">11月</option>
+                    <option value="12">12月</option>
+                </select>
+            </div>
+
+            <div class="nav-buttons">
+                <button onclick="location.href='test3.html'" class="secondary">シフト表に戻る</button>
+            </div>
+        </div>
+
+        <div id="calendar-container"></div>
+    </div>
+
+    <script>
+        // LocalStorageのキー
+        const STORAGE_KEY = 'shiftManagementData';
+        const NG_DAYS_KEY = 'staffNgDays';
+        const SELECTED_DATE_KEY = 'selectedDate';  // 年月の選択状態を保存するキー
+
+        // 職員リストの取得
+        let staffList = [];
+        let ngDays = {};
+
+        // データの読み込み
+        function loadData() {
+            try {
+                // シフト管理データから職員リストを取得
+                const shiftData = localStorage.getItem(STORAGE_KEY);
+                if (shiftData) {
+                    const parsed = JSON.parse(shiftData);
+                    staffList = parsed.staffList || [];
+                    updateStaffSelect();
+                }
+
+                // NG日データの取得
+                const ngData = localStorage.getItem(NG_DAYS_KEY);
+                if (ngData) {
+                    ngDays = JSON.parse(ngData);
+                }
+
+                // 年月の選択状態を読み込み
+                const savedDate = localStorage.getItem(SELECTED_DATE_KEY);
+                if (savedDate) {
+                    const { year, month } = JSON.parse(savedDate);
+                    document.getElementById('year').value = year;
+                    document.getElementById('month').value = month;
+                } else {
+                    // 保存された選択がない場合は今月を設定
+                    const now = new Date();
+                    document.getElementById('year').value = now.getFullYear();
+                    document.getElementById('month').value = now.getMonth() + 1;
+                    saveSelectedDate(); // 今月の設定を保存
+                }
+            } catch (error) {
+                showError('データの読み込みに失敗しました');
+                // エラー時も今月を設定
+                const now = new Date();
+                document.getElementById('year').value = now.getFullYear();
+                document.getElementById('month').value = now.getMonth() + 1;
+                saveSelectedDate(); // 今月の設定を保存
+            }
+        }
+
+        // 職員選択の更新
+        function updateStaffSelect() {
+            const select = document.getElementById('staff-select');
+            select.innerHTML = '<option value="">職員を選択してください</option>';
+            staffList.forEach(staff => {
+                const option = document.createElement('option');
+                option.value = staff;
+                option.textContent = staff;
+                select.appendChild(option);
+            });
+        }
+
+        // カレンダーの生成
+        function generateCalendar() {
+            const year = parseInt(document.getElementById('year').value);
+            const month = parseInt(document.getElementById('month').value);
+            const selectedStaff = document.getElementById('staff-select').value;
+
+            const firstDay = new Date(year, month - 1, 1);
+            const lastDay = new Date(year, month, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDay = firstDay.getDay();
+
+            let calendarHtml = `
+                <table class="calendar">
+                    <thead>
+                        <tr>
+                            <th class="weekend-sun">日</th>
+                            <th>月</th>
+                            <th>火</th>
+                            <th>水</th>
+                            <th>木</th>
+                            <th>金</th>
+                            <th class="weekend-sat">土</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            let day = 1;
+            for (let i = 0; i < 6; i++) {
+                if (day > daysInMonth) break;
+                
+                calendarHtml += '<tr>';
+                for (let j = 0; j < 7; j++) {
+                    if ((i === 0 && j < startingDay) || day > daysInMonth) {
+                        calendarHtml += '<td></td>';
+                    } else {
+                        const isWeekend = j === 0 || j === 6;
+                        const weekendClass = j === 0 ? 'weekend-sun' : (j === 6 ? 'weekend-sat' : '');
+                        const dayOfWeek = ['日', '月', '火', '水', '木', '金', '土'][j];
+                        const isNgDay = selectedStaff && ngDays[selectedStaff] && 
+                                      ngDays[selectedStaff][`${year}-${month}`] && 
+                                      ngDays[selectedStaff][`${year}-${month}`].includes(day);
+                        
+                        calendarHtml += `
+                            <td class="${weekendClass}${isNgDay ? ' ng-day' : ''}" 
+                                onclick="toggleNgDay(${year}, ${month}, ${day})">
+                                <div class="date-cell">
+                                    <span class="date-number">${day}</span>
+                                    <span class="date-day">(${dayOfWeek})</span>
+                                </div>
+                            </td>
+                        `;
+                        day++;
+                    }
+                }
+                calendarHtml += '</tr>';
+            }
+
+            calendarHtml += `
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('calendar-container').innerHTML = calendarHtml;
+        }
+
+        // NG日の切り替え
+        function toggleNgDay(year, month, day) {
+            const selectedStaff = document.getElementById('staff-select').value;
+            if (!selectedStaff) {
+                showError('職員を選択してください');
+                return;
+            }
+
+            const monthKey = `${year}-${month}`;
+            if (!ngDays[selectedStaff]) {
+                ngDays[selectedStaff] = {};
+            }
+            if (!ngDays[selectedStaff][monthKey]) {
+                ngDays[selectedStaff][monthKey] = [];
+            }
+
+            const index = ngDays[selectedStaff][monthKey].indexOf(day);
+            if (index === -1) {
+                ngDays[selectedStaff][monthKey].push(day);
+            } else {
+                ngDays[selectedStaff][monthKey].splice(index, 1);
+            }
+
+            saveNgDays();
+            generateCalendar();
+        }
+
+        // NG日データの保存
+        function saveNgDays() {
+            try {
+                localStorage.setItem(NG_DAYS_KEY, JSON.stringify(ngDays));
+                showSaveStatus('保存しました');
+            } catch (error) {
+                showError('データの保存に失敗しました');
+            }
+        }
+
+        // 保存状態の表示
+        function showSaveStatus(message) {
+            const status = document.createElement('div');
+            status.className = 'save-status';
+            status.textContent = message;
+            document.body.appendChild(status);
+            
+            setTimeout(() => {
+                status.classList.add('visible');
+            }, 100);
+
+            setTimeout(() => {
+                status.classList.remove('visible');
+                setTimeout(() => {
+                    status.remove();
+                }, 300);
+            }, 2000);
+        }
+
+        // エラーメッセージの表示
+        function showError(message) {
+            const error = document.createElement('div');
+            error.className = 'error-message';
+            error.textContent = message;
+            document.querySelector('.controls').appendChild(error);
+            
+            setTimeout(() => {
+                error.remove();
+            }, 3000);
+        }
+
+        // 年の選択肢を生成
+        function setupYearSelect() {
+            const yearSelect = document.getElementById('year');
+            const currentYear = new Date().getFullYear();
+            for (let i = currentYear - 2; i <= currentYear + 2; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i + '年';
+                yearSelect.appendChild(option);
+            }
+        }
+
+        // 年月の選択を保存
+        function saveSelectedDate() {
+            const year = document.getElementById('year').value;
+            const month = document.getElementById('month').value;
+            localStorage.setItem(SELECTED_DATE_KEY, JSON.stringify({ year, month }));
+        }
+
+        // イベントリスナーの設定を修正
+        function setupEventListeners() {
+            document.getElementById('staff-select').addEventListener('change', generateCalendar);
+            
+            // 年月の選択時にLocalStorageに保存
+            document.getElementById('year').addEventListener('change', () => {
+                saveSelectedDate();
+                generateCalendar();
+            });
+            document.getElementById('month').addEventListener('change', () => {
+                saveSelectedDate();
+                generateCalendar();
+            });
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            setupYearSelect();
+            loadData();
+            setupEventListeners();
+            generateCalendar();
+        });
+    </script>
+</body>
+</html> 
